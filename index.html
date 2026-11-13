@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>CHAOS ISLAND - Preview</title>
+<style>
+*{box-sizing:border-box}body{margin:0;overflow:hidden;background:#101820;color:#fff;font-family:Tahoma,Arial,sans-serif}
+#game{position:fixed;inset:0}#menu{position:fixed;inset:0;display:grid;place-items:center;background:linear-gradient(120deg,#07131de8,#172b25dd);z-index:5;text-align:center;padding:20px}
+.panel{max-width:440px;width:100%;padding:30px 22px;border:1px solid #7b9b86;border-radius:18px;background:#101c20eF;box-shadow:0 20px 70px #0009}
+h1{font-size:42px;margin:8px 0;color:#d7e9c7}p{line-height:1.8;color:#c5d0ca}.sub{letter-spacing:4px;color:#a8c3ad}
+button{border:0;border-radius:10px;padding:13px 22px;background:#b4d39b;color:#132019;font-weight:bold;font-size:16px;margin:5px;cursor:pointer}
+#hud{display:none;position:fixed;inset:12px 12px auto;z-index:2;pointer-events:none}
+.card{background:#101c20cc;border:1px solid #78917d;border-radius:12px;padding:10px 13px;width:190px;font-size:13px}
+.track{height:8px;background:#39443e;border-radius:8px;margin:5px 0 9px;overflow:hidden}.fill{height:100%;width:100%;background:#d56b5f}
+#help{position:fixed;bottom:12px;left:12px;z-index:2;background:#101c20bb;padding:8px 12px;border-radius:10px;font-size:12px;color:#e1e9e2}
+#mobile{display:none;position:fixed;bottom:18px;inset-inline:12px;z-index:3;justify-content:space-between;pointer-events:none}
+.pad,.acts{display:flex;flex-direction:column;gap:5px;pointer-events:auto}.pad div{display:flex;gap:5px}.mobilebtn{width:54px;height:48px;padding:0;background:#15251ddd;color:white;border:1px solid #9db69f;touch-action:none}
+@media(max-width:700px){#mobile{display:flex}#help{bottom:135px;max-width:180px}h1{font-size:34px}}
+</style>
+</head>
+<body>
+<div id="game"></div>
+<div id="menu"><div class="panel"><div class="sub">مغامرة • استكشاف • فوضى</div><h1>جزيرة الفوضى</h1><div class="sub">CHAOS ISLAND</div><p>نسخة تجريبية فردية. استكشف الجزيرة، اجمع العملات، وواجه الوحوش.</p><button id="play">ابدأ اللعب</button><p style="font-size:12px">الكمبيوتر: WASD للحركة، Shift للجري، Space للقفز، والماوس للهجوم.</p></div></div>
+<div id="hud"><div class="card"><div>الصحة: <b id="hp">100</b> / 100</div><div class="track"><div class="fill" id="hpbar"></div></div><div>العملات: <b id="coins">0</b></div><div>مستوى الفوضى: <b id="chaos">1</b></div><div>الأعداء القريبون: <b id="enemies">0</b></div></div></div>
+<div id="help">اجمع العملات وابتعد عن الوحوش</div>
+<div id="mobile"><div class="pad"><button class="mobilebtn" data-key="w">▲</button><div><button class="mobilebtn" data-key="a">◀</button><button class="mobilebtn" data-key="s">▼</button><button class="mobilebtn" data-key="d">▶</button></div></div><div class="acts"><button class="mobilebtn" id="attack">⚔ هجوم</button><button class="mobilebtn" id="jump">⬆ قفز</button></div></div>
+<script type="module">
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+const scene=new THREE.Scene();scene.background=new THREE.Color(0x91a99a);scene.fog=new THREE.Fog(0x91a99a,28,85);
+const camera=new THREE.PerspectiveCamera(65,innerWidth/innerHeight,.1,150);
+const renderer=new THREE.WebGLRenderer({antialias:false});renderer.setSize(innerWidth,innerHeight);renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));renderer.shadowMap.enabled=false;document.querySelector('#game').appendChild(renderer.domElement);
+scene.add(new THREE.HemisphereLight(0xddebdc,0x34412e,2));const sun=new THREE.DirectionalLight(0xffe4b8,2);sun.position.set(-15,25,12);scene.add(sun);
+const mat=(c)=>new THREE.MeshStandardMaterial({color:c,roughness:1});
+const ground=new THREE.Mesh(new THREE.PlaneGeometry(150,150),mat(0x526d4b));ground.rotation.x=-Math.PI/2;ground.position.y=-.15;scene.add(ground);
+const grid=new THREE.GridHelper(150,60,0x61785a,0x61785a);grid.position.y=-.13;scene.add(grid);
+const player=new THREE.Group();scene.add(player);
+const body=new THREE.Mesh(new THREE.CapsuleGeometry(.42,.85,3,6),mat(0x344f68));body.position.y=.9;player.add(body);
+const head=new THREE.Mesh(new THREE.SphereGeometry(.28,8,6),mat(0xd0a77f));head.position.y=1.65;player.add(head);
+const sword=new THREE.Mesh(new THREE.BoxGeometry(.12,.8,.12),mat(0xc7cbd0));sword.position.set(.52,1,.05);sword.rotation.z=-.35;player.add(sword);
+const trees=[];for(let i=0;i<65;i++){let x=(Math.random()-.5)*115,z=(Math.random()-.5)*115;if(Math.hypot(x,z)<9)continue;let g=new THREE.Group();let trunk=new THREE.Mesh(new THREE.CylinderGeometry(.18,.28,1.8,5),mat(0x59432e));trunk.position.y=.9;g.add(trunk);let crown=new THREE.Mesh(new THREE.ConeGeometry(1.15,2.7,6),mat(i%3?0x294b36:0x3c5d3a));crown.position.y=2.65;g.add(crown);g.position.set(x,0,z);scene.add(g);trees.push(g)}
+const coins=[];for(let i=0;i<18;i++){let c=new THREE.Mesh(new THREE.TorusGeometry(.32,.1,6,12),mat(0xe6b94e));c.position.set((Math.random()-.5)*65,.8,(Math.random()-.5)*65);scene.add(c);coins.push(c)}
+const mobs=[];for(let i=0;i<7;i++){let m=new THREE.Group();let b=new THREE.Mesh(new THREE.DodecahedronGeometry(.65,0),mat(0x713d38));b.position.y=.65;m.add(b);let eyeMat=mat(0xffd1a1);for(let s of [-1,1]){let e=new THREE.Mesh(new THREE.SphereGeometry(.09,6,6),eyeMat);e.position.set(s*.22,.85,-.52);m.add(e)}m.position.set((Math.random()-.5)*55,0,(Math.random()-.5)*55);scene.add(m);mobs.push(m)}
+const keys={};let hp=100,coinCount=0,chaos=1,started=false,vy=0,onGround=true,attackCooldown=0;
+addEventListener('keydown',e=>{keys[e.key.toLowerCase()]=true;if(e.code==='Space')jump()});addEventListener('keyup',e=>keys[e.key.toLowerCase()]=false);
+document.querySelectorAll('[data-key]').forEach(b=>{let k=b.dataset.key;b.addEventListener('pointerdown',e=>{e.preventDefault();keys[k]=true});['pointerup','pointercancel','pointerleave'].forEach(ev=>b.addEventListener(ev,()=>keys[k]=false))});
+function jump(){if(onGround){vy=.19;onGround=false}}
+document.querySelector('#jump').addEventListener('pointerdown',jump);
+function hit(){if(attackCooldown>0)return;attackCooldown=.45;sword.rotation.x=-1.1;setTimeout(()=>sword.rotation.x=0,140);for(let m of mobs){if(m.position.distanceTo(player.position)<2.5){m.position.set(1000,0,1000);coinCount+=2;document.querySelector('#coins').textContent=coinCount;break}}}
+document.querySelector('#attack').addEventListener('pointerdown',hit);addEventListener('mousedown',hit);
+document.querySelector('#play').onclick=()=>{started=true;document.querySelector('#menu').style.display='none';document.querySelector('#hud').style.display='block'};
+let t=0,last=performance.now();
+function animate(now){requestAnimationFrame(animate);let dt=Math.min((now-last)/1000,.04);last=now;if(started){t+=dt;let speed=keys.shift?8:4.5;let dx=(keys.d?1:0)-(keys.a?1:0),dz=(keys.s?1:0)-(keys.w?1:0);let len=Math.hypot(dx,dz)||1;dx/=len;dz/=len;player.position.x+=dx*speed*dt;player.position.z+=dz*speed*dt;if(dx||dz)player.rotation.y=Math.atan2(dx,dz);vy-=.55*dt;player.position.y+=vy;if(player.position.y<=0){player.position.y=0;vy=0;onGround=true}camera.position.lerp(new THREE.Vector3(player.position.x,player.position.y+5,player.position.z+9),.09);camera.lookAt(player.position.x,player.position.y+1,player.position.z);
+for(let c of coins){c.rotation.y+=dt*2;if(c.visible&&c.position.distanceTo(player.position)<1.35){c.visible=false;coinCount++;document.querySelector('#coins').textContent=coinCount}}
+let nearby=0;for(let m of mobs){if(m.position.x>900)continue;let d=m.position.distanceTo(player.position);if(d<22)nearby++;if(d>1.25&&d<30){let v=player.position.clone().sub(m.position).normalize();m.position.addScaledVector(v,dt*(1.2+chaos*.12));m.rotation.y=Math.atan2(v.x,v.z)}if(d<1.35){hp=Math.max(0,hp-12*dt);document.querySelector('#hp').textContent=Math.ceil(hp);document.querySelector('#hpbar').style.width=hp+'%'}}document.querySelector('#enemies').textContent=nearby;chaos=1+Math.floor(t/45);document.querySelector('#chaos').textContent=chaos;if(hp<=0){started=false;document.querySelector('#menu').style.display='grid';document.querySelector('#menu h1').textContent='انتهت المغامرة';document.querySelector('#play').textContent='العب من جديد';hp=100;player.position.set(0,0,0)}if(attackCooldown>0)attackCooldown-=dt}
+renderer.render(scene,camera)}
+requestAnimationFrame(animate);
+addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight)});
+</script>
+</body></html>
