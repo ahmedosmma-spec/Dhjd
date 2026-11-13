@@ -335,7 +335,7 @@ html[dir="rtl"] .rotate-overlay h2 { font-family: var(--font-body); letter-spaci
         <button class="ghost-btn" data-go="menu" data-i18n="back"></button>
         <h2 class="screen-title" data-i18n="multiplayer"></h2>
       </header>
-      <p class="notice" data-i18n="lanPrototype"></p>
+      <p class="notice" id="lan-status">جاري البحث عن عوالم أصحابك...</p>
       <div id="lan-list" class="world-list"></div>
     </section>
 
@@ -492,7 +492,7 @@ html[dir="rtl"] .rotate-overlay h2 { font-family: var(--font-body); letter-spaci
       arrows: 'Arrow buttons', joystick: 'Virtual joystick', editLayout: 'Edit layout', controlSize: 'Control size',
       saveLayout: 'Save layout', resetLayout: 'Reset',
       dragHint: 'Edit layout, then drag each control to move it. Use the size slider to resize.',
-      lanPrototype: 'PROTOTYPE: LAN discovery is simulated. Online multiplayer is not available yet.',
+      lanPrototype: 'Find and join worlds hosted by friends on the same Wi-Fi.',
       noWorlds: 'No worlds yet.', noLanWorlds: 'No LAN worlds found.', players: 'players',
       savedWorlds: 'Saved worlds', load: 'Load', delete: 'Delete', confirmDelete: 'Delete this world?',
       profile: 'Profile', profileName: 'Player name', randomize: 'Random', save: 'Save', skin: 'Skin',
@@ -1863,7 +1863,7 @@ html[dir="rtl"] .rotate-overlay h2 { font-family: var(--font-body); letter-spaci
   const nextFrame = () => new Promise((r) => requestAnimationFrame(() => r()));
   
   /** Starts (or restarts) a game for a saved world record. */
-  async function runGame(record, { onExit }) {
+  async function runGame(record, { onExit, network = null }) {
     if (session) session.stop();
     const overlay = $('game-loading');
     overlay.textContent = t('loading');
@@ -1873,7 +1873,7 @@ html[dir="rtl"] .rotate-overlay h2 { font-family: var(--font-body); letter-spaci
     await nextFrame();
     await nextFrame();
     try {
-      session = startSession(record, onExit);
+      session = startSession(record, onExit, network);
     } catch (err) {
       console.error(err);
       overlay.classList.remove('show');
@@ -1884,7 +1884,7 @@ html[dir="rtl"] .rotate-overlay h2 { font-family: var(--font-body); letter-spaci
     overlay.classList.remove('show');
   }
   
-  function startSession(record, onExit) {
+  function startSession(record, onExit, network = null) {
     const quality = getQuality();
     const lang = () => getLanguage();
   
@@ -1960,6 +1960,27 @@ html[dir="rtl"] .rotate-overlay h2 { font-family: var(--font-body); letter-spaci
       character.setHeld(held);
     }
     refreshAppearance();
+
+    // Remote peer avatar. Both browsers generate the same island from the shared seed;
+    // only player transforms are streamed over the direct WebRTC data channel.
+    let remoteCharacter = null;
+    let remoteTarget = null;
+    let lastNetSend = 0;
+    let remoteWasAttacking = false;
+    if (network) {
+      remoteCharacter = createHumanoid({ torchLight: false });
+      remoteCharacter.root.visible = false;
+      scene.add(remoteCharacter.root);
+      network.onmessage = (m) => {
+        if (m && m.t === 'state' && m.p) {
+          remoteTarget = m.p;
+          remoteCharacter.root.visible = true;
+          if (m.p.attack && !remoteWasAttacking) remoteCharacter.attack();
+          remoteWasAttacking = !!m.p.attack;
+        }
+      };
+      network.onclose = () => { if (remoteCharacter) remoteCharacter.root.visible = false; };
+    }
   
     // ---------- Input and controls ----------
     const input = createInput();
@@ -2220,6 +2241,20 @@ html[dir="rtl"] .rotate-overlay h2 { font-family: var(--font-body); letter-spaci
       clock.last = now;
       if (document.hidden) return;
       clock.time += dt;
+
+      if (network && remoteCharacter && remoteTarget) {
+        const root = remoteCharacter.root;
+        const before = root.position.clone();
+        root.position.lerp(new THREE.Vector3(remoteTarget.x, remoteTarget.y, remoteTarget.z), 0.28);
+        root.rotation.y += (remoteTarget.yaw - root.rotation.y) * 0.28;
+        const remoteSpeed = Math.min(1, before.distanceTo(root.position) / Math.max(dt, 0.001) / 4.5);
+        remoteCharacter.update(dt, { speed: remoteSpeed, grounded: true, sprint: false, vy: 0 });
+      }
+      if (network && network.send && now - lastNetSend > 50) {
+        lastNetSend = now;
+        const p = player.state;
+        network.send({ t: 'state', p: { x: p.pos.x, y: p.pos.y, z: p.pos.z, yaw: p.yaw, alive: p.alive, attack: character.isAttacking() } });
+      }
   
       const waitingForRotation = isPortraitBlocked();
       if (!paused && !waitingForRotation) update(dt);
@@ -2256,6 +2291,8 @@ html[dir="rtl"] .rotate-overlay h2 { font-family: var(--font-body); letter-spaci
       window.removeEventListener('beforeunload', onUnload);
       window.removeEventListener('keydown', onKey);
       hud.dispose();
+      if (network) network.close();
+      if (remoteCharacter) scene.remove(remoteCharacter.root);
       input.destroy();
       controls.destroy();
       enemies.dispose();
@@ -4150,13 +4187,18 @@ html[dir="rtl"] .rotate-overlay h2 { font-family: var(--font-body); letter-spaci
    * Starts a saved world. The game module (and Three.js) load on demand so the menu stays
    * light on low-end phones.
    */
-  async function startGame(record) {
+  async function startGame(record, network = null) {
     enterLandscape(); // fullscreen + landscape lock where the device allows it (must run inside the tap)
     try {
+      if (record.multiplayer && !network) {
+        const { lanDiscovery } = __r("net/lan.js");
+        network = await lanDiscovery.host(record);
+      }
       const { runGame } = await __imp("game/game.js");
-      await runGame(record, { onExit: () => { leaveLandscape(); showScreen('menu'); } });
+      await runGame(record, { network, onExit: () => { if (network) network.close(); leaveLandscape(); showScreen('menu'); } });
     } catch (err) {
       console.error(err);
+      if (network) network.close();
       leaveLandscape();
       showScreen('menu');
       if (err && err.code === 'THREE_LOAD') {
@@ -4179,31 +4221,140 @@ html[dir="rtl"] .rotate-overlay h2 { font-family: var(--font-body); letter-spaci
   
   __d["net/lan.js"] = function (__e, __r, __imp, __THREE) {
   'use strict';
-  // LAN world discovery — PROTOTYPE.
-  // A browser cannot scan the local network directly. This module is the seam where a
-  // real discovery layer (native plugin via Capacitor, or a small LAN beacon service)
-  // will plug in later. Until then it only lists this device's multiplayer-flagged worlds
-  // and labels them clearly as prototype data. It never claims remote players exist.
-  const { worldStore } = __r("world/worldStore.js");
-  
-  const lanDiscovery = {
-    isLive: false,
-  
-    async scan() {
-      return worldStore
-        .list()
-        .filter((w) => w.multiplayer)
-        .map((w) => ({
-          name: w.name,
-          thumb: w.thumb,
-          playerCount: 1, // only this device; no remote players in the prototype
-          host: 'This device',
-          source: 'prototype',
-          worldId: w.id
-        }));
+  // Peer-to-peer multiplayer. ntfy is used only to discover rooms and exchange WebRTC offers;
+  // gameplay packets travel directly between browsers over a WebRTC data channel.
+  const SIG = 'https://ntfy.sh';
+  let topic = null, events = null, askTimer = null, rooms = {}, roomListener = null;
+  let activePC = null, activeChannel = null, activeRole = null, activeRoomId = null;
+  let activeNetwork = null, announceTimer = null;
+  const makeId = () => Math.random().toString(36).slice(2, 9);
+  function hash(s) {
+    let a = 0xdeadbeef, b = 0x41c6ce57;
+    for (let i = 0; i < s.length; i++) { const c = s.charCodeAt(i); a = Math.imul(a ^ c, 2654435761); b = Math.imul(b ^ c, 1597334677); }
+    a = Math.imul(a ^ a >>> 16, 2246822507) ^ Math.imul(b ^ b >>> 13, 3266489909);
+    b = Math.imul(b ^ b >>> 16, 2246822507) ^ Math.imul(a ^ a >>> 13, 3266489909);
+    return (b >>> 0).toString(36) + (a >>> 0).toString(36);
+  }
+  async function getTopic() {
+    if (topic) return topic;
+    const r = await fetch('https://api.ipify.org?format=json');
+    if (!r.ok) throw new Error('SIGNAL_NET');
+    const ip = (await r.json()).ip;
+    topic = 'chaosisland' + hash('akazana-chaos-island|' + ip);
+    return topic;
+  }
+  function publish(o) {
+    if (!topic) return;
+    fetch(SIG + '/' + topic, { method: 'POST', body: JSON.stringify(o), keepalive: true }).catch(() => {});
+  }
+  function closeSignal() {
+    if (events) { events.close(); events = null; }
+    clearInterval(askTimer); askTimer = null;
+    clearInterval(announceTimer); announceTimer = null;
+  }
+  function announce(record) {
+    if (!activePC || activeRole !== 'host' || !activePC.localDescription) return;
+    publish({ t: 'room', id: activeRoomId, name: record.name || 'جزيرة', offer: activePC.localDescription.sdp,
+      world: { name: record.name, type: record.type, difficulty: record.difficulty, seed: record.seed } });
+  }
+  function onSignal(m) {
+    if (!m || typeof m !== 'object') return;
+    if (m.t === 'ask' && activeRole === 'host') { announce(activeNetwork.record); return; }
+    if (m.t === 'ans' && activeRole === 'host' && m.room === activeRoomId && activePC && !activePC.remoteDescription) {
+      activePC.setRemoteDescription({ type: 'answer', sdp: m.sdp }).catch(() => {}); return;
     }
+    if (m.t === 'room' && m.id && m.id !== activeRoomId) {
+      rooms[m.id] = { id: m.id, name: m.name || 'جزيرة', offer: m.offer, world: m.world || {}, ts: Date.now() };
+      if (roomListener) roomListener(listRooms());
+    } else if (m.t === 'gone' && m.id) {
+      delete rooms[m.id]; if (roomListener) roomListener(listRooms());
+    }
+  }
+  function listen() {
+    if (events || !topic) return;
+    events = new EventSource(SIG + '/' + topic + '/sse');
+    events.onmessage = (e) => {
+      try { const ev = JSON.parse(e.data); if (ev.event === 'message') onSignal(JSON.parse(ev.message)); } catch (_) {}
+    };
+  }
+  function listRooms() {
+    const now = Date.now();
+    Object.keys(rooms).forEach((id) => { if (now - rooms[id].ts > 30000) delete rooms[id]; });
+    return Object.values(rooms);
+  }
+  function makeNetwork(role, roomId, record) {
+    const net = {
+      role, roomId, record, onmessage: null, onopen: null, onclose: null,
+      send(data) { try { if (activeChannel && activeChannel.readyState === 'open') activeChannel.send(JSON.stringify(data)); } catch (_) {} },
+      close() {
+        if (role === 'host') publish({ t: 'gone', id: roomId });
+        closeSignal();
+        try { if (activePC) activePC.close(); } catch (_) {}
+        activePC = null; activeChannel = null; activeRole = null; activeRoomId = null; activeNetwork = null;
+      }
+    };
+    activeNetwork = net;
+    return net;
+  }
+  function attachChannel(ch, net) {
+    activeChannel = ch;
+    ch.onopen = () => { if (net.role === 'host') { publish({ t: 'gone', id: net.roomId }); closeSignal(); } if (net.onopen) net.onopen(); };
+    ch.onclose = () => { if (net.onclose) net.onclose(); };
+    ch.onerror = () => { if (net.onclose) net.onclose(); };
+    ch.onmessage = (e) => { try { const m = JSON.parse(e.data); if (net.onmessage) net.onmessage(m); } catch (_) {} };
+  }
+  function gather(pc) {
+    return new Promise((resolve) => {
+      if (pc.iceGatheringState === 'complete') return resolve();
+      const done = () => { if (pc.iceGatheringState === 'complete') { pc.removeEventListener('icegatheringstatechange', done); resolve(); } };
+      pc.addEventListener('icegatheringstatechange', done);
+      setTimeout(resolve, 5000);
+    });
+  }
+  async function host(record) {
+    await getTopic();
+    if (activeNetwork) activeNetwork.close();
+    const id = makeId();
+    const pc = new RTCPeerConnection({ iceServers: [] });
+    activePC = pc; activeRole = 'host'; activeRoomId = id;
+    const net = makeNetwork('host', id, record);
+    attachChannel(pc.createDataChannel('chaos-state'), net);
+    pc.onconnectionstatechange = () => { if (['failed', 'closed'].includes(pc.connectionState) && net.onclose) net.onclose(); };
+    listen();
+    await pc.setLocalDescription(await pc.createOffer());
+    await gather(pc);
+    announce(record);
+    announceTimer = setInterval(() => announce(record), 8000);
+    return net;
+  }
+  async function join(room) {
+    await getTopic();
+    if (activeNetwork) activeNetwork.close();
+    const pc = new RTCPeerConnection({ iceServers: [] });
+    activePC = pc; activeRole = 'guest'; activeRoomId = room.id;
+    const net = makeNetwork('guest', room.id, room.world || {});
+    pc.ondatachannel = (e) => attachChannel(e.channel, net);
+    pc.onconnectionstatechange = () => { if (['failed', 'closed'].includes(pc.connectionState) && net.onclose) net.onclose(); };
+    listen();
+    await pc.setRemoteDescription({ type: 'offer', sdp: room.offer });
+    await pc.setLocalDescription(await pc.createAnswer());
+    await gather(pc);
+    publish({ t: 'ans', id: makeId(), room: room.id, sdp: pc.localDescription.sdp });
+    return net;
+  }
+  const lanDiscovery = {
+    async watch(callback) {
+      roomListener = callback;
+      try { await getTopic(); listen(); publish({ t: 'ask', id: makeId() });
+        clearInterval(askTimer); askTimer = setInterval(() => publish({ t: 'ask', id: makeId() }), 5000);
+        callback(listRooms());
+      } catch (_) { callback([]); }
+    },
+    stopWatch() { roomListener = null; clearInterval(askTimer); askTimer = null; },
+    async scan() { await getTopic(); listen(); publish({ t: 'ask', id: makeId() }); await new Promise(r => setTimeout(r, 900)); return listRooms(); },
+    host, join,
+    isLive: true
   };
-  
   __e.lanDiscovery = lanDiscovery;
   };
   
@@ -4592,30 +4743,53 @@ html[dir="rtl"] .rotate-overlay h2 { font-family: var(--font-body); letter-spaci
     });
   }
   
-  // ---------- Multiplayer (LAN prototype) ----------
-  
-  async function renderLanList() {
+  // ---------- Multiplayer: discover rooms and join peer-to-peer worlds ----------
+  let lanWatchStarted = false;
+  function renderLanList() {
     const list = document.getElementById('lan-list');
-    list.innerHTML = '';
-    const hosts = await lanDiscovery.scan();
-    if (!hosts.length) {
-      list.appendChild(emptyNote(t('noLanWorlds')));
-      return;
+    const status = document.getElementById('lan-status');
+    if (!list) return;
+    function paint(rooms) {
+      list.innerHTML = '';
+      const localWorlds = worldStore.list().filter((w) => w.multiplayer);
+      localWorlds.forEach((w) => {
+        const card = document.createElement('div'); card.className = 'world-card';
+        const info = document.createElement('div'); info.className = 'world-info';
+        const title = document.createElement('h3'); title.textContent = w.name;
+        const desc = document.createElement('p'); desc.textContent = 'عالمك المحفوظ · افتحه لاستضافة أصحابك';
+        const btn = document.createElement('button'); btn.className = 'menu-btn'; btn.textContent = 'استضافة العالم';
+        btn.addEventListener('click', () => { if (playHandler) playHandler(w); });
+        info.append(title, desc); card.append(info, btn); list.appendChild(card);
+      });
+      rooms.forEach((room) => {
+        const card = document.createElement('div'); card.className = 'world-card';
+        const info = document.createElement('div'); info.className = 'world-info';
+        const title = document.createElement('h3'); title.textContent = room.name;
+        const desc = document.createElement('p'); desc.textContent = 'غرفة على نفس الشبكة · لاعب يستضيف';
+        const btn = document.createElement('button'); btn.className = 'menu-btn'; btn.textContent = 'دخول العالم';
+        btn.addEventListener('click', async () => {
+          btn.disabled = true; btn.textContent = 'جاري الاتصال...';
+          try {
+            const network = await lanDiscovery.join(room);
+            const w = room.world || {};
+            const record = worldStore.create({ name: w.name || room.name, type: w.type || 'forest', difficulty: w.difficulty || 'normal', multiplayer: true, seed: w.seed });
+            record.progress = { player: { x: 2, z: 2 } };
+            if (playHandler) playHandler(record, network);
+          } catch (e) { btn.disabled = false; btn.textContent = 'دخول العالم'; if (status) status.textContent = 'فشل الاتصال. تأكدوا أنكم على نفس شبكة الواي فاي والإنترنت يعمل لإشارة الاتصال.'; }
+        });
+        info.append(title, desc); card.append(info, btn); list.appendChild(card);
+      });
+      if (!localWorlds.length && !rooms.length) list.appendChild(emptyNote('مفيش عوالم دلوقتي. فعّل خيار اللاعبين المتعددين عند إنشاء عالم، أو استنى صاحبك يفتح غرفته.'));
+      if (status && !status.textContent) status.textContent = 'بيتم البحث عن غرف أصحابك...';
     }
-    hosts.forEach((h) => {
-      const card = document.createElement('div');
-      card.className = 'world-card';
-      card.innerHTML = `
-        <img class="world-thumb" alt="" />
-        <div class="world-info">
-          <h3></h3>
-          <p></p>
-        </div>`;
-      card.querySelector('img').src = h.thumb || '';
-      card.querySelector('h3').textContent = h.name;
-      card.querySelector('p').textContent = `${h.playerCount} ${t('players')} · ${h.host} (${h.source})`;
-      list.appendChild(card);
-    });
+    if (status) status.textContent = 'جاري البحث عن عوالم أصحابك على نفس شبكة الواي فاي...';
+    paint([]);
+    if (!lanWatchStarted) {
+      lanWatchStarted = true;
+      lanDiscovery.watch((rooms) => { if (document.getElementById('screen-multiplayer')?.classList.contains('active')) paint(rooms); });
+    } else {
+      lanDiscovery.scan().then(paint).catch(() => { if (status) status.textContent = 'لازم الإنترنت يكون شغال للعثور على الغرف.'; });
+    }
   }
   
   // ---------- Other worlds (saved locally) ----------
