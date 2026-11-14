@@ -2,7 +2,10 @@
 <html lang="en" dir="ltr">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <link rel="manifest" href="manifest.json" />
+    <meta name="theme-color" content="#0b0a0d" />
+    <link rel="icon" href="icon-192.png" type="image/png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <meta name="theme-color" content="#0b0a0d" />
   <title>CHAOS ISLAND</title>
   <style>
@@ -244,6 +247,21 @@ html[dir="rtl"] .minimap { inset-inline-start: auto; inset-inline-end: 12px; }
 }
 html[dir="rtl"] .rotate-overlay h2 { font-family: var(--font-body); letter-spacing: 0; }
 
+/* ---------- Day and night, beds, food ---------- */
+#btn-food { top: calc(env(safe-area-inset-top) + 150px); min-width: 64px; }
+.sleep-overlay { position: absolute; inset: 0; z-index: 60; display: none; align-items: center; justify-content: center; background: #000; color: #8f8474; font-family: var(--font-display); letter-spacing: 0.14em; font-size: 18px; opacity: 0; pointer-events: none; }
+.sleep-overlay.show { display: flex; pointer-events: auto; }
+
+/* ---------- Quick slots (first 6 bag slots) and view toggle ---------- */
+#btn-view { top: calc(env(safe-area-inset-top) + 196px); min-width: 64px; font-size: 12px; }
+.hotbar { position: absolute; bottom: calc(env(safe-area-inset-bottom) + 8px); left: 50%; transform: translateX(-50%); display: flex; gap: 5px; pointer-events: auto; }
+.hot-slot { position: relative; width: 52px; height: 52px; padding: 2px; border-radius: 8px; background: rgba(18, 14, 22, 0.78); border: 1px solid var(--line); color: var(--bone); font-size: 11px; line-height: 1.1; display: flex; flex-direction: column; align-items: center; justify-content: center; overflow: hidden; }
+.hot-slot.empty { opacity: 0.45; }
+.hot-slot small { position: absolute; bottom: 2px; inset-inline-end: 4px; font-size: 10px; color: var(--muted); }
+.hot-slot kbd { position: absolute; top: 1px; inset-inline-start: 3px; font-size: 9px; color: var(--muted); }
+.hot-slot span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 480px) { .hot-slot { width: 44px; height: 46px; } }
+
 </style>
   </head>
 <body>
@@ -335,7 +353,7 @@ html[dir="rtl"] .rotate-overlay h2 { font-family: var(--font-body); letter-spaci
         <button class="ghost-btn" data-go="menu" data-i18n="back"></button>
         <h2 class="screen-title" data-i18n="multiplayer"></h2>
       </header>
-      <p class="notice" id="lan-status">جاري البحث عن عوالم أصحابك...</p>
+      <p class="notice" data-i18n="lanPrototype"></p>
       <div id="lan-list" class="world-list"></div>
     </section>
 
@@ -445,7 +463,10 @@ html[dir="rtl"] .rotate-overlay h2 { font-family: var(--font-body); letter-spaci
         <button id="btn-pause" class="hud-btn" type="button">II</button>
         <button id="btn-inv" class="hud-btn" type="button" data-i18n="inventory"></button>
         <button id="btn-craft" class="hud-btn" type="button" data-i18n="crafting"></button>
+        <button id="btn-food" class="hud-btn" type="button"></button>
+        <button id="btn-view" class="hud-btn" type="button"></button>
         <canvas id="minimap" class="minimap" width="96" height="96"></canvas>
+        <div id="hotbar" class="hotbar" role="toolbar"></div>
         <div id="hud-msg" class="hud-msg"></div>
         <div id="hud-prompt" class="hud-prompt"></div>
         <div id="hud-debug" class="hud-debug"></div>
@@ -453,6 +474,7 @@ html[dir="rtl"] .rotate-overlay h2 { font-family: var(--font-body); letter-spaci
       <div id="hud-hurt" class="hud-hurt"></div>
       <div id="game-loading" class="game-loading"></div>
       <div id="controls-layer" class="controls-layer"></div>
+      <div id="sleep-overlay" class="sleep-overlay"><p data-i18n="sleeping"></p></div>
       <div id="panel-inventory" class="panel hidden"></div>
       <div id="panel-crafting" class="panel hidden"></div>
       <div id="panel-pause" class="panel hidden"></div>
@@ -492,7 +514,7 @@ html[dir="rtl"] .rotate-overlay h2 { font-family: var(--font-body); letter-spaci
       arrows: 'Arrow buttons', joystick: 'Virtual joystick', editLayout: 'Edit layout', controlSize: 'Control size',
       saveLayout: 'Save layout', resetLayout: 'Reset',
       dragHint: 'Edit layout, then drag each control to move it. Use the size slider to resize.',
-      lanPrototype: 'Find and join worlds hosted by friends on the same Wi-Fi.',
+      lanPrototype: 'PROTOTYPE: LAN discovery is simulated. Online multiplayer is not available yet.',
       noWorlds: 'No worlds yet.', noLanWorlds: 'No LAN worlds found.', players: 'players',
       savedWorlds: 'Saved worlds', load: 'Load', delete: 'Delete', confirmDelete: 'Delete this world?',
       profile: 'Profile', profileName: 'Player name', randomize: 'Random', save: 'Save', skin: 'Skin',
@@ -512,14 +534,18 @@ html[dir="rtl"] .rotate-overlay h2 { font-family: var(--font-body); letter-spaci
       needs: 'Needs', craftBtn: 'Craft', saveGame: 'Save game',
       msgDefeated: 'Defeated', msgAte: 'Ate', msgNothingToEat: 'Nothing to eat', msgLava: 'Lava! Get out!',
       msgEquipped: 'Equipped', msgGathering: 'Gathering', msgUnlocked: 'New skin unlocked',
-      msgNoSpace: 'No room in the bag', startHint: 'You have nothing. Gather wood, stone and fiber to begin.',
+      msgNoSpace: 'No room in the bag', startHint: 'You have nothing. Gather wood, stone and fiber. Berry bushes and herbs are food.',
       done: 'Done', editorHint: 'Drag a control to move it. Drag its orange corner to resize.',
       skinLocked: 'Locked', webglError: 'This device could not start 3D graphics.',
       tapToSkip: 'Tap to continue', sizeLabel: 'Size', seedLabel: 'Seed',
       worldLoadError: 'Could not start the world.', mpNote: 'Multiplayer flag is saved; online play is not available yet.',
       editLayoutTitle: 'Edit controls',
       threeLoadError: 'Could not download the 3D engine. Check your internet connection and try again.',
-      rotateTitle: 'Rotate your device', rotateHint: 'CHAOS ISLAND is played in landscape. Turn your phone sideways to continue.'
+      rotateTitle: 'Rotate your device', rotateHint: 'CHAOS ISLAND is played in landscape. Turn your phone sideways to continue.',
+      viewFirst: '1st person', viewThird: '3rd person', hotbar: 'Quick slots',
+      food: 'Food', place: 'Place', sleeping: 'Sleeping...', sleepPrompt: 'E: Sleep', sleepLater: 'Sleep (night only)',
+      msgSleepNight: 'You can only sleep at night.', msgWake: 'You wake up. Morning has come.',
+      msgBedPlaced: 'Bed placed', msgBedBlocked: 'No room for a bed here'
     },
     ar: {
       studioCredit: 'لعبة من استوديو أكانازا',
@@ -551,14 +577,18 @@ html[dir="rtl"] .rotate-overlay h2 { font-family: var(--font-body); letter-spaci
       needs: 'يحتاج', craftBtn: 'اصنع', saveGame: 'حفظ اللعبة',
       msgDefeated: 'هُزم', msgAte: 'أكلت', msgNothingToEat: 'لا شيء للأكل', msgLava: 'حمم! ابتعد!',
       msgEquipped: 'تم التجهيز', msgGathering: 'جارٍ الجمع', msgUnlocked: 'تم فتح مظهر جديد',
-      msgNoSpace: 'لا مكان في الحقيبة', startHint: 'لا تملك شيئاً. اجمع الخشب والحجر والألياف لتبدأ.',
+      msgNoSpace: 'لا مكان في الحقيبة', startHint: 'لا تملك شيئاً. اجمع الخشب والحجر والألياف. شجيرات التوت والأعشاب طعام.',
       done: 'تم', editorHint: 'اسحب أداة لتحريكها. اسحب زاويتها البرتقالية لتغيير حجمها.',
       skinLocked: 'مقفل', webglError: 'تعذر تشغيل الرسوميات ثلاثية الأبعاد على هذا الجهاز.',
       tapToSkip: 'المس للمتابعة', sizeLabel: 'الحجم', seedLabel: 'البذرة',
       worldLoadError: 'تعذر بدء العالم.', mpNote: 'تم حفظ خيار اللعب الجماعي؛ اللعب عبر الإنترنت غير متاح بعد.',
       editLayoutTitle: 'تعديل أدوات التحكم',
       threeLoadError: 'تعذر تحميل محرك الـ3D. تأكد من اتصالك بالإنترنت وحاول مرة أخرى.',
-      rotateTitle: 'قم بتدوير جهازك', rotateHint: 'تُلعب CHAOS ISLAND بالعرض. أدر هاتفك أفقياً للمتابعة.'
+      rotateTitle: 'قم بتدوير جهازك', rotateHint: 'تُلعب CHAOS ISLAND بالعرض. أدر هاتفك أفقياً للمتابعة.',
+      viewFirst: 'منظور أول شخص', viewThird: 'منظور تالت شخص', hotbar: 'الخانات السريعة',
+      food: 'أكل', place: 'ضع', sleeping: 'نايم...', sleepPrompt: 'E: نام', sleepLater: 'النوم بالليل بس',
+      msgSleepNight: 'تقدر تنام بالليل بس.', msgWake: 'صحيت... الصبح طلع.',
+      msgBedPlaced: 'تم وضع السرير', msgBedBlocked: 'مفيش مكان للسرير هنا'
     }
   };
   
@@ -1026,7 +1056,7 @@ html[dir="rtl"] .rotate-overlay h2 { font-family: var(--font-body); letter-spaci
   __d["data/items.js"] = function (__e, __r, __imp, __THREE) {
   'use strict';
   // Item definitions. Ids are English identifiers; names are localized.
-  // kind: 'resource' | 'material' | 'food' | 'weapon' | 'armor' | 'tool' | 'skin'
+  // kind: 'resource' | 'material' | 'food' | 'weapon' | 'armor' | 'tool' | 'placeable' | 'skin'
   const ITEMS = {
     wood:        { kind: 'material', name: { en: 'Wood', ar: 'خشب' }, stack: 64 },
     stone:       { kind: 'material', name: { en: 'Stone', ar: 'حجر' }, stack: 64 },
@@ -1048,6 +1078,7 @@ html[dir="rtl"] .rotate-overlay h2 { font-family: var(--font-body); letter-spaci
     stone_axe:   { kind: 'tool', name: { en: 'Stone Axe', ar: 'فأس حجري' }, stack: 1, durability: 60, damage: 4 },
     obsidian_blade: { kind: 'weapon', name: { en: 'Obsidian Blade', ar: 'شفرة الزجاج' }, stack: 1, durability: 90, damage: 9 },
     bone_spear:  { kind: 'weapon', name: { en: 'Bone Spear', ar: 'رمح عظمي' }, stack: 1, durability: 70, damage: 7 },
+    bed:         { kind: 'placeable', name: { en: 'Bed', ar: 'سرير' }, stack: 1 },
     torch:       { kind: 'tool', name: { en: 'Torch', ar: 'مشعل' }, stack: 8 },
   
     // Armor
@@ -1097,7 +1128,8 @@ html[dir="rtl"] .rotate-overlay h2 { font-family: var(--font-body); letter-spaci
     { id: 'iron_helm',      out: 'iron_helm', count: 1, needs: { stone: 4, clay: 2 } },
     { id: 'ember_cloak',    out: 'ember_cloak', count: 1, needs: { ember_core: 2, pelt: 2 } },
     { id: 'sand_greaves',   out: 'sand_greaves', count: 1, needs: { clay: 3, sand_shard: 3 } },
-    { id: 'bone_charm',     out: 'bone_charm', count: 1, needs: { bone: 3, relic: 1 } }
+    { id: 'bone_charm',     out: 'bone_charm', count: 1, needs: { bone: 3, relic: 1 } },
+    { id: 'bed',            out: 'bed', count: 1, needs: { wood: 4, fiber: 4 } }
   ];
   
   __e.RECIPES = RECIPES;
@@ -1839,7 +1871,8 @@ html[dir="rtl"] .rotate-overlay h2 { font-family: var(--font-body); letter-spaci
   const { getQuality } = __r("core/quality.js");
   const { profile } = __r("core/profile.js");
   const { ITEMS, GATHER, itemName } = __r("data/items.js");
-  const { generateWorld, renderThumbnail, BIOME } = __r("world/worldgen.js");
+  const { generateWorld, renderThumbnail, BIOME, SEA_LEVEL } = __r("world/worldgen.js");
+  const { RECIPES } = __r("data/recipes.js");
   const { worldStore } = __r("world/worldStore.js");
   const { createInput } = __r("game/input.js");
   const { createControlsLayer } = __r("ui/controls.js");
@@ -1858,12 +1891,45 @@ html[dir="rtl"] .rotate-overlay h2 { font-family: var(--font-body); letter-spaci
   const LAVA_DPS = 14;
   const FALL_SAFE_SPEED = 14;
   const DEBUG = new URLSearchParams(location.search).has('debug');
+  const DAY_LENGTH = 720;     // real seconds for one full day (dawn to dawn)
+  const SLEEP_SECONDS = 5;    // sleeping at night wakes you in the morning after this long
+  const CAM_DIST = 3.8;       // close third-person camera
+  const EYE_HEIGHT = 1.6;     // first-person camera height
   
   let session = null;
   const nextFrame = () => new Promise((r) => requestAnimationFrame(() => r()));
   
+  // Smallest signed difference between two angles, in radians.
+  function angleDiff(from, to) {
+    let d = (to - from) % (Math.PI * 2);
+    if (d > Math.PI) d -= Math.PI * 2;
+    if (d < -Math.PI) d += Math.PI * 2;
+    return d;
+  }
+  
+  // A simple wooden bed with a blanket and pillow, built from boxes.
+  function buildBedMesh() {
+    const g = new THREE.Group();
+    const wood = new THREE.MeshStandardMaterial({ color: 0x4a2f1c, roughness: 0.95 });
+    const cloth = new THREE.MeshStandardMaterial({ color: 0x6e2b2b, roughness: 1 });
+    const linen = new THREE.MeshStandardMaterial({ color: 0xcfc4ad, roughness: 1 });
+    const box = (w, h, d, m, x, y, z) => {
+      const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m);
+      mesh.position.set(x, y, z);
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      g.add(mesh);
+    };
+    box(1.9, 0.22, 1.1, wood, 0, 0.36, 0);
+    for (const [x, z] of [[-0.85, -0.45], [0.85, -0.45], [-0.85, 0.45], [0.85, 0.45]]) box(0.12, 0.36, 0.12, wood, x, 0.18, z);
+    box(1.8, 0.14, 1.0, linen, 0, 0.53, 0);
+    box(1.1, 0.06, 1.04, cloth, -0.3, 0.6, 0);
+    box(0.4, 0.14, 0.72, linen, 0.7, 0.6, 0);
+    return g;
+  }
+  
   /** Starts (or restarts) a game for a saved world record. */
-  async function runGame(record, { onExit, network = null }) {
+  async function runGame(record, { onExit }) {
     if (session) session.stop();
     const overlay = $('game-loading');
     overlay.textContent = t('loading');
@@ -1873,7 +1939,7 @@ html[dir="rtl"] .rotate-overlay h2 { font-family: var(--font-body); letter-spaci
     await nextFrame();
     await nextFrame();
     try {
-      session = startSession(record, onExit, network);
+      session = startSession(record, onExit);
     } catch (err) {
       console.error(err);
       overlay.classList.remove('show');
@@ -1884,7 +1950,7 @@ html[dir="rtl"] .rotate-overlay h2 { font-family: var(--font-body); letter-spaci
     overlay.classList.remove('show');
   }
   
-  function startSession(record, onExit, network = null) {
+  function startSession(record, onExit) {
     const quality = getQuality();
     const lang = () => getLanguage();
   
@@ -1936,6 +2002,97 @@ html[dir="rtl"] .rotate-overlay h2 { font-family: var(--font-body); letter-spaci
     const gatherer = createGatherer(world, sceneRenderer, saved ? saved.harvested : []);
     if (saved && saved.harvested) saved.harvested.forEach((id) => { sceneRenderer.removeNode(id); world.colliders.remove(id); });
   
+    // ---------- Day and night ----------
+    // dayTime is a fraction of one day: 0 = dawn, 0.25 = noon, 0.5 = dusk, 0.75 = midnight.
+    let dayTime = saved && saved.dayTime != null ? saved.dayTime : 0.12;
+    const sunAltitude = () => Math.sin(dayTime * Math.PI * 2);
+    const daylight = () => Math.min(1, Math.max(0, (sunAltitude() + 0.2) / 0.45));
+    const isNight = () => sunAltitude() < -0.12;
+    let lastDaylight = -1;
+    function applyDaylight() {
+      const k = daylight();
+      if (Math.abs(k - lastDaylight) > 0.002) { sceneRenderer.setDaylight(k); lastDaylight = k; }
+    }
+  
+    // ---------- Beds and sleep ----------
+    const beds = [];          // { x, z, group } for every bed placed in this world
+    let sleep = null;         // { t, from } while asleep
+    const sleepEl = $('sleep-overlay');
+    const foodBtn = $('btn-food');
+    foodBtn.onclick = () => eatOne();
+  
+    // ---------- Camera view: close third person (default) or first person ----------
+    const viewBtn = $('btn-view');
+    function refreshViewButton() { viewBtn.textContent = cam.firstPerson ? t('viewFirst') : t('viewThird'); }
+    function toggleView() {
+      cam.firstPerson = !cam.firstPerson;
+      character.root.visible = !cam.firstPerson;
+      refreshViewButton();
+    }
+    viewBtn.onclick = toggleView;
+  
+    function addBed(x, z, yaw = 0) {
+      const group = buildBedMesh();
+      group.position.set(x, world.heightAt(x, z), z);
+      group.rotation.y = yaw;
+      scene.add(group);
+      world.colliders.add(x, z, 0.9, `bed:${beds.length}:${x.toFixed(1)}:${z.toFixed(1)}`);
+      beds.push({ x, z, group });
+    }
+    if (saved && saved.placed) saved.placed.forEach((p) => addBed(p.x, p.z));
+  
+    function nearestBed(pos) {
+      return beds.find((b) => Math.hypot(b.x - pos.x, b.z - pos.z) < 2.4) || null;
+    }
+  
+    function placeFromBag() {
+      const s = player.state;
+      if (!s.alive) return;
+      // Try the spot in front first, then nearby directions, so a tree in the way does not block it.
+      const tries = [[0, 2.2], [0.5, 2.2], [-0.5, 2.2], [0, 3], [1.0, 2.4], [-1.0, 2.4], [Math.PI, 2.4]];
+      let spot = null;
+      for (const [turn, dist] of tries) {
+        const yaw = s.yaw + turn;
+        const x = s.pos.x + Math.sin(yaw) * dist;
+        const z = s.pos.z + Math.cos(yaw) * dist;
+        const probe = new THREE.Vector3(x, 0, z);
+        world.colliders.resolve(probe, 0.9);
+        const free = Math.abs(probe.x - x) < 0.02 && Math.abs(probe.z - z) < 0.02;
+        if (free && world.heightAt(x, z) >= SEA_LEVEL + 0.5) { spot = { x, z, yaw }; break; }
+      }
+      if (!spot) { hud.message(t('msgBedBlocked'), 2200); return; }
+      if (inventory.remove('bed', 1) === false) return;
+      addBed(spot.x, spot.z, spot.yaw);
+      hud.message(t('msgBedPlaced'), 2000);
+      hud.refresh();
+    }
+  
+    function startSleep() {
+      if (!isNight()) { hud.message(t('msgSleepNight'), 2000); return; }
+      input.held.clear();
+      sleep = { t: 0, from: dayTime };
+      sleepEl.classList.add('show');
+    }
+  
+    function updateSleep(dt) {
+      sleep.t += dt;
+      const p = Math.min(1, sleep.t / SLEEP_SECONDS);
+      dayTime = (sleep.from + (1.06 - sleep.from) * p) % 1; // time runs fast until morning (0.06 = early day)
+      const fade = p < 0.4 ? p / 0.4 : p > 0.8 ? (1 - p) / 0.2 : 1;
+      sleepEl.style.opacity = String(Math.min(1, Math.max(0, fade)));
+      if (p >= 1) wakeUp();
+    }
+  
+    function wakeUp() {
+      sleep = null;
+      sleepEl.classList.remove('show');
+      sleepEl.style.opacity = '';
+      player.heal(100);
+      player.state.stamina = player.state.staminaMax;
+      hud.message(t('msgWake'), 2600);
+      save(false);
+    }
+  
     // Loot goes straight into the bag.
     const onLoot = (id, qty) => {
       const left = inventory.add(id, qty);
@@ -1960,35 +2117,16 @@ html[dir="rtl"] .rotate-overlay h2 { font-family: var(--font-body); letter-spaci
       character.setHeld(held);
     }
     refreshAppearance();
-
-    // Remote peer avatar. Both browsers generate the same island from the shared seed;
-    // only player transforms are streamed over the direct WebRTC data channel.
-    let remoteCharacter = null;
-    let remoteTarget = null;
-    let lastNetSend = 0;
-    let remoteWasAttacking = false;
-    if (network) {
-      remoteCharacter = createHumanoid({ torchLight: false });
-      remoteCharacter.root.visible = false;
-      scene.add(remoteCharacter.root);
-      network.onmessage = (m) => {
-        if (m && m.t === 'state' && m.p) {
-          remoteTarget = m.p;
-          remoteCharacter.root.visible = true;
-          if (m.p.attack && !remoteWasAttacking) remoteCharacter.attack();
-          remoteWasAttacking = !!m.p.attack;
-        }
-      };
-      network.onclose = () => { if (remoteCharacter) remoteCharacter.root.visible = false; };
-    }
   
     // ---------- Input and controls ----------
     const input = createInput();
     const controls = createControlsLayer($('controls-layer'), input);
   
     // Camera orbit: yaw is the camera's angle around the player (see player.js movement convention).
-    const cam = { yaw: saved && saved.camYaw !== undefined ? saved.camYaw : Math.PI, pitch: 0.38, dist: 6.2, pos: new THREE.Vector3(), ready: false };
+    const cam = { yaw: saved && saved.camYaw !== undefined ? saved.camYaw : Math.PI, pitch: 0.32, dist: CAM_DIST, manualUntil: 0, firstPerson: false, pos: new THREE.Vector3(), ready: false };
     const look = { id: null, x: 0, y: 0 };
+    refreshViewButton();
+    if (cam.firstPerson) character.root.visible = false;
     const onPointerDown = (e) => {
       if (hud.isPanelOpen() || look.id !== null) return;
       look.id = e.pointerId; look.x = e.clientX; look.y = e.clientY;
@@ -1997,11 +2135,12 @@ html[dir="rtl"] .rotate-overlay h2 { font-family: var(--font-body); letter-spaci
     const onPointerMove = (e) => {
       if (e.pointerId !== look.id) return;
       cam.yaw += (e.clientX - look.x) * 0.0055;
+      cam.manualUntil = performance.now() + 1800; // pause auto-follow while the player drags the view
       cam.pitch = Math.min(1.25, Math.max(0.06, cam.pitch - (e.clientY - look.y) * 0.004));
       look.x = e.clientX; look.y = e.clientY;
     };
     const onPointerUp = (e) => { if (e.pointerId === look.id) look.id = null; };
-    const onWheel = (e) => { cam.dist = Math.min(11, Math.max(3.2, cam.dist + e.deltaY * 0.005)); };
+    const onWheel = (e) => { cam.dist = Math.min(8, Math.max(2.2, cam.dist + e.deltaY * 0.005)); };
     canvas.addEventListener('pointerdown', onPointerDown);
     canvas.addEventListener('pointermove', onPointerMove);
     canvas.addEventListener('pointerup', onPointerUp);
@@ -2048,7 +2187,7 @@ html[dir="rtl"] .rotate-overlay h2 { font-family: var(--font-body); letter-spaci
     }
   
     function startAttack() {
-      if (!player.state.alive || actionCooldown > 0) return;
+      if (!player.state.alive || actionCooldown > 0 || sleep) return;
       if (player.state.stamina < ATTACK_STAMINA) { hud.message(t('msgNotEnough'), 900); actionCooldown = 0.3; return; }
       player.state.stamina -= ATTACK_STAMINA;
       actionCooldown = ACTION_COOLDOWN;
@@ -2066,9 +2205,17 @@ html[dir="rtl"] .rotate-overlay h2 { font-family: var(--font-body); letter-spaci
     }
   
     function interact() {
-      if (!player.state.alive || actionCooldown > 0) return;
+      if (!player.state.alive || actionCooldown > 0 || sleep) return;
       actionCooldown = ACTION_COOLDOWN;
+      if (nearestBed(player.state.pos)) { startSleep(); return; }
       if (gatherer.nearest(player.state.pos)) { character.attack(); tryGather(); return; }
+      const food = inventory.bag.find((s) => s && ITEMS[s.id].kind === 'food');
+      if (!food) { hud.message(t('msgNothingToEat')); return; }
+      eat(food.id);
+    }
+  
+    function eatOne() {
+      if (!player.state.alive) return;
       const food = inventory.bag.find((s) => s && ITEMS[s.id].kind === 'food');
       if (!food) { hud.message(t('msgNothingToEat')); return; }
       eat(food.id);
@@ -2086,6 +2233,7 @@ html[dir="rtl"] .rotate-overlay h2 { font-family: var(--font-body); letter-spaci
       if (!stack) return;
       const def = ITEMS[stack.id];
       if (def.kind === 'food') { eat(stack.id); return; }
+      if (def.kind === 'placeable') { placeFromBag(); return; }
       if (def.kind === 'weapon' || def.kind === 'armor') {
         const id = stack.id;
         if (inventory.equip(index)) {
@@ -2125,7 +2273,9 @@ html[dir="rtl"] .rotate-overlay h2 { font-family: var(--font-body); letter-spaci
         harvested: gatherer.harvested(),
         deadEnemies: enemies.deadIds(),
         playTime,
-        camYaw: cam.yaw
+        camYaw: cam.yaw,
+        dayTime,
+        placed: beds.map((b) => ({ x: b.x, z: b.z }))
       });
       sinceSave = 0;
       if (announce) hud.message(ok ? t('msgSaved') : t('cannotStore'));
@@ -2148,6 +2298,8 @@ html[dir="rtl"] .rotate-overlay h2 { font-family: var(--font-body); letter-spaci
     function update(dt) {
       const s = player.state;
       actionCooldown = Math.max(0, actionCooldown - dt);
+      if (sleep) { updateSleep(dt); return; }
+      dayTime = (dayTime + dt / DAY_LENGTH) % 1;
   
       if (s.alive) {
         Object.assign(motion, player.update(dt, input, cam.yaw, world));
@@ -2202,6 +2354,19 @@ html[dir="rtl"] .rotate-overlay h2 { font-family: var(--font-body); letter-spaci
   
     function updateCamera(dt) {
       const s = player.state;
+      if (cam.firstPerson) {
+        // Eye level, looking where the camera is turned. The body is hidden in this mode.
+        const cp = Math.cos(cam.pitch);
+        camTarget.set(s.pos.x, s.pos.y + EYE_HEIGHT, s.pos.z);
+        cam.pos.copy(camTarget);
+        camera.position.copy(camTarget);
+        camera.lookAt(camTarget.x - Math.sin(cam.yaw) * cp * 10, camTarget.y - Math.sin(cam.pitch) * 10, camTarget.z - Math.cos(cam.yaw) * cp * 10);
+        return;
+      }
+      // Follow: while walking, the camera swings in behind the character.
+      if (s.alive && !sleep && Math.hypot(s.vel.x, s.vel.z) > 0.6 && performance.now() > cam.manualUntil) {
+        cam.yaw += angleDiff(cam.yaw, s.yaw + Math.PI) * (1 - Math.exp(-3 * dt));
+      }
       camTarget.set(s.pos.x, s.pos.y + 1.45, s.pos.z);
       const cp = Math.cos(cam.pitch);
       camWant.set(Math.sin(cam.yaw) * cp, Math.sin(cam.pitch), Math.cos(cam.yaw) * cp).multiplyScalar(cam.dist).add(camTarget);
@@ -2218,8 +2383,11 @@ html[dir="rtl"] .rotate-overlay h2 { font-family: var(--font-body); letter-spaci
       const s = player.state;
       hud.setBars(s.health, s.healthMax, s.stamina, s.staminaMax);
       hud.drawMinimap(s.pos, s.yaw, enemies.list);
-      const node = s.alive ? gatherer.nearest(s.pos) : null;
-      hud.setPrompt(node ? `${t('gather')}: ${GATHER[node.kind].label[lang()] || GATHER[node.kind].label.en}` : null);
+      const food = Object.keys(ITEMS).filter((id) => ITEMS[id].kind === 'food').reduce((n, id) => n + inventory.count(id), 0);
+      foodBtn.textContent = `${t('food')} ${food}`;
+      const bed = s.alive ? nearestBed(s.pos) : null;
+      const node = s.alive && !bed ? gatherer.nearest(s.pos) : null;
+      hud.setPrompt(bed ? (isNight() ? t('sleepPrompt') : t('sleepLater')) : node ? `${t('gather')}: ${GATHER[node.kind].label[lang()] || GATHER[node.kind].label.en}` : null);
     }
   
     // Lowers the render resolution when the device cannot keep up, and recovers when it can.
@@ -2241,25 +2409,12 @@ html[dir="rtl"] .rotate-overlay h2 { font-family: var(--font-body); letter-spaci
       clock.last = now;
       if (document.hidden) return;
       clock.time += dt;
-
-      if (network && remoteCharacter && remoteTarget) {
-        const root = remoteCharacter.root;
-        const before = root.position.clone();
-        root.position.lerp(new THREE.Vector3(remoteTarget.x, remoteTarget.y, remoteTarget.z), 0.28);
-        root.rotation.y += (remoteTarget.yaw - root.rotation.y) * 0.28;
-        const remoteSpeed = Math.min(1, before.distanceTo(root.position) / Math.max(dt, 0.001) / 4.5);
-        remoteCharacter.update(dt, { speed: remoteSpeed, grounded: true, sprint: false, vy: 0 });
-      }
-      if (network && network.send && now - lastNetSend > 50) {
-        lastNetSend = now;
-        const p = player.state;
-        network.send({ t: 'state', p: { x: p.pos.x, y: p.pos.y, z: p.pos.z, yaw: p.yaw, alive: p.alive, attack: character.isAttacking() } });
-      }
   
       const waitingForRotation = isPortraitBlocked();
       if (!paused && !waitingForRotation) update(dt);
       updateCamera(dt);
       sceneRenderer.update(paused || waitingForRotation ? 0 : dt, clock.time, player.state.pos);
+      applyDaylight();
       renderer.render(scene, camera);
       input.endFrame();
   
@@ -2275,6 +2430,8 @@ html[dir="rtl"] .rotate-overlay h2 { font-family: var(--font-body); letter-spaci
       if (e.code === 'KeyI') hud.togglePanel('inventory');
       else if (e.code === 'KeyC') hud.togglePanel('crafting');
       else if (e.code === 'Escape') hud.togglePanel('pause');
+      else if (e.code === 'KeyV') toggleView();
+      else if (/^Digit[1-6]$/.test(e.code)) useSlot(Number(e.code.slice(5)) - 1);
     };
     window.addEventListener('resize', onResize);
     document.addEventListener('visibilitychange', onVisibility);
@@ -2290,9 +2447,10 @@ html[dir="rtl"] .rotate-overlay h2 { font-family: var(--font-body); letter-spaci
       document.removeEventListener('visibilitychange', onVisibility);
       window.removeEventListener('beforeunload', onUnload);
       window.removeEventListener('keydown', onKey);
+      foodBtn.onclick = null;
+      viewBtn.onclick = null;
+      sleepEl.classList.remove('show');
       hud.dispose();
-      if (network) network.close();
-      if (remoteCharacter) scene.remove(remoteCharacter.root);
       input.destroy();
       controls.destroy();
       enemies.dispose();
@@ -2309,7 +2467,21 @@ html[dir="rtl"] .rotate-overlay h2 { font-family: var(--font-body); letter-spaci
   
     if (DEBUG) {
       $('hud-debug').classList.add('show');
-      window.__chaos = { world, player, inventory, enemies, gatherer, scene, camera, renderer, input, hud, character, cam, save };
+      window.__chaos = {
+        world, player, inventory, enemies, gatherer, scene, camera, renderer, input, hud, character, cam, save,
+        // Test hooks: the day clock, beds and the sleep state.
+        sim: {
+          get dayTime() { return dayTime; },
+          set dayTime(v) { dayTime = v; },
+          get sleeping() { return !!sleep; },
+          get beds() { return beds.map((b) => ({ x: b.x, z: b.z })); },
+          interact,
+          placeFromBag,
+          eatOne,
+          craftId: (id) => craft(RECIPES.find((r) => r.id === id)),
+          useSlot
+        }
+      };
     }
   
     if (!saved) hud.message(t('startHint'), 6000);
@@ -2538,6 +2710,30 @@ html[dir="rtl"] .rotate-overlay h2 { font-family: var(--font-body); letter-spaci
       if (openName === 'inventory') renderInventory();
       else if (openName === 'crafting') renderCrafting();
       else if (openName === 'pause') renderPause();
+      renderHotbar();
+    }
+  
+    // Quick slots: the first six bag slots, always visible, so the bag does not need to be opened for food or tools.
+    const hotbar = $('hotbar');
+    function renderHotbar() {
+      const lang = getLanguage();
+      hotbar.replaceChildren();
+      for (let i = 0; i < 6; i++) {
+        const stack = inventory.bag[i];
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'hot-slot' + (stack ? '' : ' empty');
+        const key = document.createElement('kbd'); key.textContent = String(i + 1);
+        b.appendChild(key);
+        if (stack) {
+          const name = document.createElement('span'); name.textContent = itemName(stack.id, lang);
+          const qty = document.createElement('small'); qty.textContent = stack.qty > 1 ? String(stack.qty) : '';
+          b.append(name, qty);
+        }
+        b.setAttribute('aria-label', stack ? itemName(stack.id, lang) : String(i + 1));
+        b.addEventListener('click', () => ctx.onUseSlot(i));
+        hotbar.appendChild(b);
+      }
     }
   
     function slotButton(label, sub, count, isSelected, onClick) {
@@ -2584,9 +2780,10 @@ html[dir="rtl"] .rotate-overlay h2 { font-family: var(--font-body); letter-spaci
         row.appendChild(label);
         const canEat = def.kind === 'food';
         const canEquip = def.kind === 'weapon' || def.kind === 'armor';
-        if (canEat || canEquip) {
+        const canPlace = def.kind === 'placeable';
+        if (canEat || canEquip || canPlace) {
           const act = document.createElement('button'); act.className = 'menu-btn';
-          act.textContent = canEat ? t('eat') : t('equip');
+          act.textContent = canEat ? t('eat') : canPlace ? t('place') : t('equip');
           act.addEventListener('click', () => { ctx.onUseSlot(selected); if (!inventory.bag[selected]) selected = -1; refresh(); });
           row.appendChild(act);
         }
@@ -2631,10 +2828,13 @@ html[dir="rtl"] .rotate-overlay h2 { font-family: var(--font-body); letter-spaci
       p.appendChild(col);
     }
   
+    renderHotbar();
+  
     return {
       setBars, message, setPrompt, flashHurt, drawMinimap, openPanel, closePanels, togglePanel, refresh,
       isPanelOpen: () => openName !== null,
       dispose() {
+        hotbar.replaceChildren();
         listeners.forEach((off) => off());
         closePanels(true);
         clearTimeout(msgTimer);
@@ -3763,6 +3963,23 @@ html[dir="rtl"] .rotate-overlay h2 { font-family: var(--font-body); letter-spaci
       if (particles) particles.update(dt, time, playerPos);
     }
   
+    // Day/night. k = 1 full day, 0 full night: the sun dims, the sky darkens, fog follows, stars appear.
+    const NIGHT_SKY = new THREE.Color(0x05070d);
+    const dayFog = new THREE.Color(env.fog);
+    const mixed = new THREE.Color();
+    function setDaylight(k) {
+      sun.intensity = env.sunPower * (0.05 + 0.95 * k);
+      hemi.intensity = env.hemi * (0.3 + 0.7 * k);
+      mixed.copy(NIGHT_SKY).lerp(dayFog, k);
+      scene.background.copy(mixed);
+      scene.fog.color.copy(mixed);
+      sky.group.traverse((o) => {
+        if (o.isPoints) o.material.opacity = 0.25 + 0.75 * (1 - k);
+        else if (o.isSprite) o.material.opacity = 0.85 * k;
+        else if (o.isMesh && o.material.vertexColors) o.material.color.setScalar(0.1 + 0.9 * k);
+      });
+    }
+  
     function removeNode(id) {
       const node = world.nodeIndex.get(id);
       if (!node || node.removed || !node.chunkMesh) return;
@@ -3775,6 +3992,7 @@ html[dir="rtl"] .rotate-overlay h2 { font-family: var(--font-body); letter-spaci
       group,
       update,
       removeNode,
+      setDaylight,
       fogFar,
       exposure: env.exposure,
       dispose() {
@@ -4187,18 +4405,13 @@ html[dir="rtl"] .rotate-overlay h2 { font-family: var(--font-body); letter-spaci
    * Starts a saved world. The game module (and Three.js) load on demand so the menu stays
    * light on low-end phones.
    */
-  async function startGame(record, network = null) {
+  async function startGame(record) {
     enterLandscape(); // fullscreen + landscape lock where the device allows it (must run inside the tap)
     try {
-      if (record.multiplayer && !network) {
-        const { lanDiscovery } = __r("net/lan.js");
-        network = await lanDiscovery.host(record);
-      }
       const { runGame } = await __imp("game/game.js");
-      await runGame(record, { network, onExit: () => { if (network) network.close(); leaveLandscape(); showScreen('menu'); } });
+      await runGame(record, { onExit: () => { leaveLandscape(); showScreen('menu'); } });
     } catch (err) {
       console.error(err);
-      if (network) network.close();
       leaveLandscape();
       showScreen('menu');
       if (err && err.code === 'THREE_LOAD') {
@@ -4221,140 +4434,31 @@ html[dir="rtl"] .rotate-overlay h2 { font-family: var(--font-body); letter-spaci
   
   __d["net/lan.js"] = function (__e, __r, __imp, __THREE) {
   'use strict';
-  // Peer-to-peer multiplayer. ntfy is used only to discover rooms and exchange WebRTC offers;
-  // gameplay packets travel directly between browsers over a WebRTC data channel.
-  const SIG = 'https://ntfy.sh';
-  let topic = null, events = null, askTimer = null, rooms = {}, roomListener = null;
-  let activePC = null, activeChannel = null, activeRole = null, activeRoomId = null;
-  let activeNetwork = null, announceTimer = null;
-  const makeId = () => Math.random().toString(36).slice(2, 9);
-  function hash(s) {
-    let a = 0xdeadbeef, b = 0x41c6ce57;
-    for (let i = 0; i < s.length; i++) { const c = s.charCodeAt(i); a = Math.imul(a ^ c, 2654435761); b = Math.imul(b ^ c, 1597334677); }
-    a = Math.imul(a ^ a >>> 16, 2246822507) ^ Math.imul(b ^ b >>> 13, 3266489909);
-    b = Math.imul(b ^ b >>> 16, 2246822507) ^ Math.imul(a ^ a >>> 13, 3266489909);
-    return (b >>> 0).toString(36) + (a >>> 0).toString(36);
-  }
-  async function getTopic() {
-    if (topic) return topic;
-    const r = await fetch('https://api.ipify.org?format=json');
-    if (!r.ok) throw new Error('SIGNAL_NET');
-    const ip = (await r.json()).ip;
-    topic = 'chaosisland' + hash('akazana-chaos-island|' + ip);
-    return topic;
-  }
-  function publish(o) {
-    if (!topic) return;
-    fetch(SIG + '/' + topic, { method: 'POST', body: JSON.stringify(o), keepalive: true }).catch(() => {});
-  }
-  function closeSignal() {
-    if (events) { events.close(); events = null; }
-    clearInterval(askTimer); askTimer = null;
-    clearInterval(announceTimer); announceTimer = null;
-  }
-  function announce(record) {
-    if (!activePC || activeRole !== 'host' || !activePC.localDescription) return;
-    publish({ t: 'room', id: activeRoomId, name: record.name || 'جزيرة', offer: activePC.localDescription.sdp,
-      world: { name: record.name, type: record.type, difficulty: record.difficulty, seed: record.seed } });
-  }
-  function onSignal(m) {
-    if (!m || typeof m !== 'object') return;
-    if (m.t === 'ask' && activeRole === 'host') { announce(activeNetwork.record); return; }
-    if (m.t === 'ans' && activeRole === 'host' && m.room === activeRoomId && activePC && !activePC.remoteDescription) {
-      activePC.setRemoteDescription({ type: 'answer', sdp: m.sdp }).catch(() => {}); return;
-    }
-    if (m.t === 'room' && m.id && m.id !== activeRoomId) {
-      rooms[m.id] = { id: m.id, name: m.name || 'جزيرة', offer: m.offer, world: m.world || {}, ts: Date.now() };
-      if (roomListener) roomListener(listRooms());
-    } else if (m.t === 'gone' && m.id) {
-      delete rooms[m.id]; if (roomListener) roomListener(listRooms());
-    }
-  }
-  function listen() {
-    if (events || !topic) return;
-    events = new EventSource(SIG + '/' + topic + '/sse');
-    events.onmessage = (e) => {
-      try { const ev = JSON.parse(e.data); if (ev.event === 'message') onSignal(JSON.parse(ev.message)); } catch (_) {}
-    };
-  }
-  function listRooms() {
-    const now = Date.now();
-    Object.keys(rooms).forEach((id) => { if (now - rooms[id].ts > 30000) delete rooms[id]; });
-    return Object.values(rooms);
-  }
-  function makeNetwork(role, roomId, record) {
-    const net = {
-      role, roomId, record, onmessage: null, onopen: null, onclose: null,
-      send(data) { try { if (activeChannel && activeChannel.readyState === 'open') activeChannel.send(JSON.stringify(data)); } catch (_) {} },
-      close() {
-        if (role === 'host') publish({ t: 'gone', id: roomId });
-        closeSignal();
-        try { if (activePC) activePC.close(); } catch (_) {}
-        activePC = null; activeChannel = null; activeRole = null; activeRoomId = null; activeNetwork = null;
-      }
-    };
-    activeNetwork = net;
-    return net;
-  }
-  function attachChannel(ch, net) {
-    activeChannel = ch;
-    ch.onopen = () => { if (net.role === 'host') { publish({ t: 'gone', id: net.roomId }); closeSignal(); } if (net.onopen) net.onopen(); };
-    ch.onclose = () => { if (net.onclose) net.onclose(); };
-    ch.onerror = () => { if (net.onclose) net.onclose(); };
-    ch.onmessage = (e) => { try { const m = JSON.parse(e.data); if (net.onmessage) net.onmessage(m); } catch (_) {} };
-  }
-  function gather(pc) {
-    return new Promise((resolve) => {
-      if (pc.iceGatheringState === 'complete') return resolve();
-      const done = () => { if (pc.iceGatheringState === 'complete') { pc.removeEventListener('icegatheringstatechange', done); resolve(); } };
-      pc.addEventListener('icegatheringstatechange', done);
-      setTimeout(resolve, 5000);
-    });
-  }
-  async function host(record) {
-    await getTopic();
-    if (activeNetwork) activeNetwork.close();
-    const id = makeId();
-    const pc = new RTCPeerConnection({ iceServers: [] });
-    activePC = pc; activeRole = 'host'; activeRoomId = id;
-    const net = makeNetwork('host', id, record);
-    attachChannel(pc.createDataChannel('chaos-state'), net);
-    pc.onconnectionstatechange = () => { if (['failed', 'closed'].includes(pc.connectionState) && net.onclose) net.onclose(); };
-    listen();
-    await pc.setLocalDescription(await pc.createOffer());
-    await gather(pc);
-    announce(record);
-    announceTimer = setInterval(() => announce(record), 8000);
-    return net;
-  }
-  async function join(room) {
-    await getTopic();
-    if (activeNetwork) activeNetwork.close();
-    const pc = new RTCPeerConnection({ iceServers: [] });
-    activePC = pc; activeRole = 'guest'; activeRoomId = room.id;
-    const net = makeNetwork('guest', room.id, room.world || {});
-    pc.ondatachannel = (e) => attachChannel(e.channel, net);
-    pc.onconnectionstatechange = () => { if (['failed', 'closed'].includes(pc.connectionState) && net.onclose) net.onclose(); };
-    listen();
-    await pc.setRemoteDescription({ type: 'offer', sdp: room.offer });
-    await pc.setLocalDescription(await pc.createAnswer());
-    await gather(pc);
-    publish({ t: 'ans', id: makeId(), room: room.id, sdp: pc.localDescription.sdp });
-    return net;
-  }
+  // LAN world discovery — PROTOTYPE.
+  // A browser cannot scan the local network directly. This module is the seam where a
+  // real discovery layer (native plugin via Capacitor, or a small LAN beacon service)
+  // will plug in later. Until then it only lists this device's multiplayer-flagged worlds
+  // and labels them clearly as prototype data. It never claims remote players exist.
+  const { worldStore } = __r("world/worldStore.js");
+  
   const lanDiscovery = {
-    async watch(callback) {
-      roomListener = callback;
-      try { await getTopic(); listen(); publish({ t: 'ask', id: makeId() });
-        clearInterval(askTimer); askTimer = setInterval(() => publish({ t: 'ask', id: makeId() }), 5000);
-        callback(listRooms());
-      } catch (_) { callback([]); }
-    },
-    stopWatch() { roomListener = null; clearInterval(askTimer); askTimer = null; },
-    async scan() { await getTopic(); listen(); publish({ t: 'ask', id: makeId() }); await new Promise(r => setTimeout(r, 900)); return listRooms(); },
-    host, join,
-    isLive: true
+    isLive: false,
+  
+    async scan() {
+      return worldStore
+        .list()
+        .filter((w) => w.multiplayer)
+        .map((w) => ({
+          name: w.name,
+          thumb: w.thumb,
+          playerCount: 1, // only this device; no remote players in the prototype
+          host: 'This device',
+          source: 'prototype',
+          worldId: w.id
+        }));
+    }
   };
+  
   __e.lanDiscovery = lanDiscovery;
   };
   
@@ -4743,53 +4847,30 @@ html[dir="rtl"] .rotate-overlay h2 { font-family: var(--font-body); letter-spaci
     });
   }
   
-  // ---------- Multiplayer: discover rooms and join peer-to-peer worlds ----------
-  let lanWatchStarted = false;
-  function renderLanList() {
+  // ---------- Multiplayer (LAN prototype) ----------
+  
+  async function renderLanList() {
     const list = document.getElementById('lan-list');
-    const status = document.getElementById('lan-status');
-    if (!list) return;
-    function paint(rooms) {
-      list.innerHTML = '';
-      const localWorlds = worldStore.list().filter((w) => w.multiplayer);
-      localWorlds.forEach((w) => {
-        const card = document.createElement('div'); card.className = 'world-card';
-        const info = document.createElement('div'); info.className = 'world-info';
-        const title = document.createElement('h3'); title.textContent = w.name;
-        const desc = document.createElement('p'); desc.textContent = 'عالمك المحفوظ · افتحه لاستضافة أصحابك';
-        const btn = document.createElement('button'); btn.className = 'menu-btn'; btn.textContent = 'استضافة العالم';
-        btn.addEventListener('click', () => { if (playHandler) playHandler(w); });
-        info.append(title, desc); card.append(info, btn); list.appendChild(card);
-      });
-      rooms.forEach((room) => {
-        const card = document.createElement('div'); card.className = 'world-card';
-        const info = document.createElement('div'); info.className = 'world-info';
-        const title = document.createElement('h3'); title.textContent = room.name;
-        const desc = document.createElement('p'); desc.textContent = 'غرفة على نفس الشبكة · لاعب يستضيف';
-        const btn = document.createElement('button'); btn.className = 'menu-btn'; btn.textContent = 'دخول العالم';
-        btn.addEventListener('click', async () => {
-          btn.disabled = true; btn.textContent = 'جاري الاتصال...';
-          try {
-            const network = await lanDiscovery.join(room);
-            const w = room.world || {};
-            const record = worldStore.create({ name: w.name || room.name, type: w.type || 'forest', difficulty: w.difficulty || 'normal', multiplayer: true, seed: w.seed });
-            record.progress = { player: { x: 2, z: 2 } };
-            if (playHandler) playHandler(record, network);
-          } catch (e) { btn.disabled = false; btn.textContent = 'دخول العالم'; if (status) status.textContent = 'فشل الاتصال. تأكدوا أنكم على نفس شبكة الواي فاي والإنترنت يعمل لإشارة الاتصال.'; }
-        });
-        info.append(title, desc); card.append(info, btn); list.appendChild(card);
-      });
-      if (!localWorlds.length && !rooms.length) list.appendChild(emptyNote('مفيش عوالم دلوقتي. فعّل خيار اللاعبين المتعددين عند إنشاء عالم، أو استنى صاحبك يفتح غرفته.'));
-      if (status && !status.textContent) status.textContent = 'بيتم البحث عن غرف أصحابك...';
+    list.innerHTML = '';
+    const hosts = await lanDiscovery.scan();
+    if (!hosts.length) {
+      list.appendChild(emptyNote(t('noLanWorlds')));
+      return;
     }
-    if (status) status.textContent = 'جاري البحث عن عوالم أصحابك على نفس شبكة الواي فاي...';
-    paint([]);
-    if (!lanWatchStarted) {
-      lanWatchStarted = true;
-      lanDiscovery.watch((rooms) => { if (document.getElementById('screen-multiplayer')?.classList.contains('active')) paint(rooms); });
-    } else {
-      lanDiscovery.scan().then(paint).catch(() => { if (status) status.textContent = 'لازم الإنترنت يكون شغال للعثور على الغرف.'; });
-    }
+    hosts.forEach((h) => {
+      const card = document.createElement('div');
+      card.className = 'world-card';
+      card.innerHTML = `
+        <img class="world-thumb" alt="" />
+        <div class="world-info">
+          <h3></h3>
+          <p></p>
+        </div>`;
+      card.querySelector('img').src = h.thumb || '';
+      card.querySelector('h3').textContent = h.name;
+      card.querySelector('p').textContent = `${h.playerCount} ${t('players')} · ${h.host} (${h.source})`;
+      list.appendChild(card);
+    });
   }
   
   // ---------- Other worlds (saved locally) ----------
